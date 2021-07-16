@@ -14,6 +14,7 @@
 #include <ws2tcpip.h>
 #include <stdio.h> 
 #include <stdlib.h>
+#include "channel_agent.h"
 
 #define MAX 4096
 // Mudge used these values in his example
