@@ -369,4 +369,5 @@ void main(int argc, char* argv[])
 	CloseHandle(beaconPipe);
 
 	exit(0);
+}
 
