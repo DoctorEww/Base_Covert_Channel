@@ -173,7 +173,7 @@ void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
  *          (length(payload) % 256) +  128 otherwise.
  */ 
 unsigned char decode_length(char* payload) {
-    unsigned char payload_length = (char)(strlen(payload) % 256);
+    unsigned char payload_length = (unsigned char)(strlen(payload) % 256);
     if (payload_length <= 128) {
         payload_length += 128;
     }
@@ -187,9 +187,13 @@ unsigned char decode_length(char* payload) {
  *  @return a pointer to the head of the payload string of appropriate length.
  */ 
 char* encode_length(unsigned char byte) {
-    char* payload_str = malloc((int)byte);
-    unsigned char i = 0;
-    for (i = 0; i < byte; i++) {
+	unsigned int length = (int) byte;
+	if (length <= 128) {
+        length  += 128;
+    }
+    char* payload_str = malloc(length);
+    unsigned int i = 0;
+    for (i = 0; i < length; i++) {
         *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
     }
     return payload_str;
@@ -320,11 +324,11 @@ void main(int argc, char* argv[])
 		printf("Sent to TS\n");
 		
 
-		//TODO - receiving. How do either the sender or receiver know when the other has finished sending data? 
-		//TODO - likely answer: send a packet 100 bytes long. 
-
+		//Allocate space for random line
 		random_line = malloc(512*sizeof(unsigned char));
 		byte_count = 0;
+
+		//Read in data from server. 
 		read_size = recvData(sockfd, random_line, BUFFER_MAX_SIZE);
 		while (read_size != 100 && byte_count < 512) {
 			if (read_size < 0)
