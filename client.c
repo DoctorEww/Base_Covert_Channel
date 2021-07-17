@@ -174,9 +174,6 @@ void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
  */ 
 unsigned char decode_length(char* payload) {
     unsigned char payload_length = (unsigned char)(strlen(payload) % 256);
-    if (payload_length <= 128) {
-        payload_length += 128;
-    }
     return payload_length;
 }
 
