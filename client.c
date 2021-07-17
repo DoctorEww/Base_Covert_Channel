@@ -202,6 +202,7 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 			decoded_value = decode_position(&(random_line[256 * i]));
 			if (decoded_value > 255) {
 				done = 1;
+				break;
 			} else {
 				buffer[total] = (unsigned char) (decoded_value % 256);
 			}
