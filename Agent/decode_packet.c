@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "channel_agent.h"
 
 /**
     This function decodes a packet's length into a byte.
@@ -30,3 +31,4 @@ char* encode_length(unsigned char byte) {
     }
     return payload_str;
 }
+
