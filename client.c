@@ -186,28 +186,30 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
 */
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 
-	char* random_line = malloc(256);
+	char* random_line = malloc(max);
 	unsigned short decoded_value = 300;
 	DWORD size = 0, total = 0, done = 0;
-
-	size = recv(sd, random_line, 256, 0);
+	unsigned int i = 0;
+	size = recv(sd, random_line, max, 0);
 
 	while (done == 0 && total < max) {
-			if (size < 0)
-			{
-				printf("recvData error, exiting\n");
-				break;
-			}
-			decoded_value = decode_position(random_line);
+		if (size < 0)
+		{
+			printf("recvData error, exiting\n");
+			break;
+		}
+		for (i = 0; i <= size/256; i++) { 
+			decoded_value = decode_position(&(random_line[256 * i]));
 			if (decoded_value > 255) {
 				done = 1;
 			} else {
 				buffer[total] = decoded_value;
 			}
 			total++;
-			memset(random_line, 0, 256);
-			size = recv(sd, random_line, 256, 0);
-			
+		}
+		
+		memset(random_line, 0, max);
+		size = recv(sd, random_line, max, 0);
 		}
 	free(random_line);
 
