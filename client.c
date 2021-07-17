@@ -92,44 +92,57 @@ SOCKET create_socket(char* ip, char* port)
 
 
 /**
- *  This function decodes a packet's length into a byte.
- *  @param payload: the string to decode the length of.
- *  @return length(payload) % 256 if length(payload) % 256 > 128,
- *          (length(payload) % 256) +  128 otherwise.
+ *  This function decodes the position of a 0 in a packet's payload into a byte.
+ *  If there is no 0, this is recoreded as "end transmission". 
+ *  @param payload: the string to find the 0 in.
+ *  @param end_transmission: a pointer to an end_transmission flag. 
+ *  @return the position of the 0 in the payload (0-255), or 256 if no 0.  
+ *  @pre len(payload) == 256 bytes. 
+ *  @post if there is no 0 byte in the payload, the "end_transmisison" value is set to 1. 
+ *  
  */ 
-unsigned char decode_length(char* payload) {
-    unsigned char payload_length = (unsigned char)(strlen(payload) % 256);
-    return payload_length;
+unsigned short decode_position(char* payload) {
+	char found = 0;
+    unsigned short zero_pos = 0;
+	while (found == 0 && zero_pos < 256) {
+		if ((unsigned char) payload[zero_pos] == 0) {
+			found = 1;
+		} else {
+			zero_pos++;
+		}
+	}
+    return zero_pos;
 }
 
 
 /**
  *  This function encodes a byte into a string of appropriate length.
  *  @param byte: the byte to encode into the length of the string.
+ *  @param payload_str: pointer to a buffer to write the payload string into.
  *  @return a pointer to the head of the payload string of appropriate length.
+ *  @pre len(payload_str) == 256.
  */ 
-char* encode_length(unsigned char byte) {
-	unsigned int length = (int) byte;
-	if (length <= 128) {
-        length  += 128;
-    }
-    char* payload_str = malloc(512);
-    unsigned int i = 0;
-    for (i = 0; i < length; i++) {
-        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
-    }
-    return payload_str;
+void encode_position(unsigned char byte, char* payload_str) {
+	unsigned int i = 0;
+	for (i = 0; i < 256; i++) {
+		if (i == (unsigned int) byte) {
+			payload_str[i] = 0;
+		} else {
+			payload_str[i] = (rand() % 255) + 1;
+		}
+	}
 }
 
 /**
- *  This function generates a 100-byte end transmission string.
- *  @return a pointer to the head of the 100-byte end transmission string.
+ *  This function generates a 256-byte end transmission string with no 0.
+ *  @param payload_str: pointer to a buffer to write the payload string into.
+ *  @return a pointer to the head of the end transmission string.
+ *  @pre len(payload_str) == 256.
  */ 
-char* encode_end_transmission() {
-    char* payload_str = malloc(100);
-    unsigned char i = 0;
-    for (i = 0; i < 100; i++) {
-        *(payload_str + i) = (rand() % 256);    //TODO - seed the random number table
+char* encode_end_transmission(char* payload_str) {
+    unsigned int i = 0;
+    for (i = 0; i < 256; i++) {
+        payload_str[i] = ((rand() % 255) + 1);    
     }
     return payload_str;
 }
@@ -146,17 +159,17 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
 	
 		DWORD byte_counter = 0;
 		unsigned char byte = 0;
-		char* random_line = NULL;
+		char* random_line = malloc(256);
 		for (byte_counter = 0; byte_counter < len; byte_counter++) {
 			byte = (unsigned char) data[byte_counter];
-			random_line = encode_length(byte);
-			send(sd, random_line, len, 0);
-			free(random_line);
+			encode_position(byte, random_line);
+			send(sd, random_line, 256, 0);
+			memset(random_line, 0, 256);
 		}
 		
 		//Send "End Transmission" 100 byte packet
-		random_line = encode_end_transmission();
-		sendData(sd, random_line, 100);
+		encode_end_transmission(random_line);
+		sendData(sd, random_line, 256);
 		free(random_line);
 }
 
@@ -173,21 +186,27 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
 */
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 
-	char* random_line = malloc(512);
-	DWORD size = 0, total = 0;
+	char* random_line = malloc(256);
+	unsigned short decoded_value = 300;
+	DWORD size = 0, total = 0, done = 0;
 
-	size = recv(sd, random_line, 512, 0);
+	size = recv(sd, random_line, 256, 0);
 
-	while (size != 100 && total < max) {
+	while (done == 0 && total < max) {
 			if (size < 0)
 			{
 				printf("recvData error, exiting\n");
 				break;
 			}
-			buffer[total] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
+			decoded_value = decode_position(random_line);
+			if (decoded_value > 255) {
+				done = 1;
+			} else {
+				buffer[total] = decoded_value;
+			}
 			total++;
-			memset(random_line, 0, 512);
-			size = recv(sd, random_line, 512, 0);
+			memset(random_line, 0, 256);
+			size = recv(sd, random_line, 256, 0);
 			
 		}
 	free(random_line);
