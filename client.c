@@ -218,6 +218,7 @@ char* encode_end_transmission() {
  */
 void main(int argc, char* argv[])
 {
+	printf("Running the file");
 	// Set connection and IRC info
 	if (argc != 4)
 	{
