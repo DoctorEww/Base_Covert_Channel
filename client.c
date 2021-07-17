@@ -14,7 +14,7 @@
 #include <ws2tcpip.h>
 #include <stdio.h> 
 #include <stdlib.h>
-#include "channel_agent.h"
+#include <time.h>
 
 #define MAX 4096
 // Mudge used these values in his example
@@ -200,7 +200,7 @@ char* encode_length(unsigned char byte) {
  *  This function generates a 100-byte end transmission string.
  *  @return a pointer to the head of the 100-byte end transmission string.
  */ 
-char* encode_end_transmission(unsigned char byte) {
+char* encode_end_transmission() {
     char* payload_str = malloc(100);
     unsigned char i = 0;
     for (i = 0; i < 100; i++) {
@@ -225,7 +225,10 @@ void main(int argc, char* argv[])
 		printf("Incorrect number of args: client.exe [IP] [PORT] [PIPE_STR]");
 		exit(1);
 	}
+	time_t time_seed;
+	srand((unsigned int) time(&time_seed));
 	
+	//seed random number table
 
 	// Disable crash messages
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -314,7 +317,7 @@ void main(int argc, char* argv[])
 		}
 		
 		//Send "End Transmission" 100 byte packet
-		random_line = enncode_end_transmission();
+		random_line = encode_end_transmission();
 		sendData(sockfd, random_line, 100);
 		free(random_line);
 
@@ -323,28 +326,28 @@ void main(int argc, char* argv[])
 
 		//Allocate space for random line
 		random_line = malloc(512*sizeof(unsigned char));
-		byte_count = 0;
+		byte_counter = 0;
 
 		//Read in data from server. 
-		read_size = recvData(sockfd, random_line, BUFFER_MAX_SIZE);
-		while (read_size != 100 && byte_count < 512) {
+		read_size = recvData(sockfd, random_line, 512);
+		while (read_size != 100 && byte_counter < BUFFER_MAX_SIZE) {
 			if (read_size < 0)
 			{
 				printf("recvData error, exiting\n");
 				break;
 			}
-			buffer[byte_count] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
-			byte_count++;
+			buffer[byte_counter] = decode_length(random_line); //TODO - this is a touch inefficient. Maybe change it to just work with read_size?
+			byte_counter++;
 			read_size = recvData(sockfd, random_line, BUFFER_MAX_SIZE);
 			
 		}
-		printf("Recv %d bytes from TS\n", byte_count);
+		printf("Recv %d bytes from TS\n", byte_counter);
 		free(random_line);
-		write_frame(beaconPipe, buffer, byte_count);
+		write_frame(beaconPipe, buffer, byte_counter);
 		printf("Sent to beacon\n");
 	}
 	//Free all allocated memory and close all memory leaks 
-	free(random_line)
+	free(random_line);
 	free(payload);
 	free(buffer);
 	closesocket(sockfd);
