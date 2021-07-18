@@ -186,55 +186,54 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 	char* payload_in = malloc(PACKET_SIZE);
 	char* start = buffer;
 
-	//Open file
 
-	FILE* outfile = fopen("channel_output.txt", "w");
+	system("echo allocated-payloads >> channel_out.txt");
+	
 
 
 	DWORD size = 0, total = 0;
 	WORD length = 0, done = 0;
 	recv(sd, (char*)&header_in, 5, 0);
-	fprintf(outfile, "first header received");
+	system("echo received-header >> channel_out.txt");
 
 	length = ((256*header_in[3]) + header_in[4]);
-	fprintf(outfile, "length in header calculated");
+	system("echo calculated-length >> channel_out.txt");
 	while (total < max) {
 		
 		if (header_in[2] == 0x02) {
-			fprintf(outfile, "End Transmission");
+			system("echo end-transmission >> channel_out.txt");
 			done = 1;
 			break;
 		} else {
 			size = recv(sd, payload_in, length, 0);
-			fprintf(outfile, "Full packet received");
+			system("echo read-payload >> channel_out.txt");
 			if (size < 0)
 			{
 				printf("recvData error, exiting\n");
 				break;
 			}
 			memcpy(start, payload_in, length);
-			fprintf(outfile, "Payload copied to buffer");
+			system("echo copied-to-buffer >> channel_out.txt");
 			start = (start + length);
-			fprintf(outfile, "start pointer moved up");
+			system("echo moved-start-ptr >> channel_out.txt");
 			memset(payload_in, 0, PACKET_SIZE);
-			fprintf(outfile, "payload_in cleared");
+			system("echo cleared-payload >> channel_out.txt");
 		}
 		
 		length = 0;
 		memset(header_in, 0, 5);
-		fprintf(outfile, "header cleared");
+		system("echo cleared-header >> channel_out.txt");
 		recv(sd, (char*)&header_in, 5, 0);
-		fprintf(outfile, "Next header read in");
+		system("echo received-next-header >> channel_out.txt");
 		length = (256*header_in[3]) + header_in[4];
-		fprintf(outfile, "next length calculated");
+		system("echo  >> channel_out.txt");
+
 
 		}
 
 	free(payload_in);
 	free(header_in);
-	fprintf(outfile, "data freed");
 
-	fclose(outfile);
 
 	return total;
 }
