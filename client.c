@@ -92,59 +92,53 @@ SOCKET create_socket(char* ip, char* port)
 
 
 /**
- *  This function decodes the position of a 0 in a packet's payload into a byte.
- *  If there is no 0, this is recoreded as "end transmission". 
- *  @param payload: the string to find the 0 in.
- *  @param end_transmission: a pointer to an end_transmission flag. 
- *  @return the position of the 0 in the payload (0-255), or 256 if no 0.  
- *  @pre len(payload) == 256 bytes. 
- *  @post if there is no 0 byte in the payload, the "end_transmisison" value is set to 1. 
+ *  This function pulls the data out of the TLS packet. 
+ *  @param packet: the TLS packet to remove the string from.
+ *  @param payload: the buffer to write the string to. 
+ *  @return the length of payload_out
+ *  @pre len(payload) = len(packet) - 5
+ *  @post application data from packet buffer gets written to payload buffer. 
  *  
  */ 
-unsigned short decode_position(char* payload) {
-	char found = 0;
-    unsigned short zero_pos = 0;
-	while (found == 0 && zero_pos < 256) {
-		if ((unsigned char) payload[zero_pos] == 0) {
-			found = 1;
-		} else {
-			zero_pos++;
-		}
-	}
-    return zero_pos;
+unsigned short decode_position(char* packet_in, char* payload_out ) {
+	
+	unsigned short length = (unsigned short) ((256 * packet_in[3]) + packet_in[4]);
+	char* start = &(packet_in[5]);
+	memcpy(payload_out, start, length);
+	return length;
 }
 
 
 /**
  *  This function encodes a byte into a string of appropriate length.
- *  @param byte: the byte to encode into the length of the string.
- *  @param payload_str: pointer to a buffer to write the payload string into.
- *  @return a pointer to the head of the payload string of appropriate length.
- *  @pre len(payload_str) == 256.
+ *  @param payload_in: the bytes to send. 
+ *  @param payload_str: pointer to a buffer to write the TLS packet into.
+ *  @param length: length of payload_in data. 
+ *  @pre len(payload_in) = len(payload_out) - 5
+ *  @post first three bytes of payload_out match TLS 1.0, bytes 4 and 5 are the length, and 
+ *   	  the rest contains the contents of payload_in.
  */ 
-void encode_position(unsigned char byte, char* payload_str) {
-	unsigned int i = 0;
-	for (i = 0; i < 256; i++) {
-		if (i == (unsigned int) byte) {
-			payload_str[i] = 0;
-		} else {
-			payload_str[i] = (rand() % 255) + 1;
-		}
-	}
+void encode_position(char* payload_in, char* packet_out, unsigned short length) {
+	packet_out[0] = 0x17;
+	packet_out[1] = 0x03;
+	packet_out[2] = 0x01;
+	packet_out[3] = length / 256;
+	packet_out[4] = length % 256;
+	memcpy(&(packet_out[5]), payload_in, length);
 }
 
 /**
- *  This function generates a 256-byte end transmission string with no 0.
- *  @param payload_str: pointer to a buffer to write the payload string into.
- *  @return a pointer to the head of the end transmission string.
- *  @pre len(payload_str) == 256.
+ *  This function generates an empty end transmission payload.
+ *  @param packet_out: pointer to a buffer to write the payload string into.
+ *  @pre len(packet_out) == 5.
+ *  @post packet_out represents a TLSv1.1 packet with length 0. 
  */ 
-char* encode_end_transmission(char* payload_str) {
-    unsigned int i = 0;
-    for (i = 0; i < 256; i++) {
-        payload_str[i] = ((rand() % 255) + 1);    
-    }
-    return payload_str;
+void encode_end_transmission(char* packet_out) {
+	packet_out[0] = 0x17;
+	packet_out[1] = 0x03;
+	packet_out[2] = 0x02;
+	packet_out[3] = 0;
+	packet_out[4] = 0;
 }
 
 
@@ -157,20 +151,21 @@ char* encode_end_transmission(char* payload_str) {
 */
 void sendData(SOCKET sd, const char* data, DWORD len) {
 	
-		DWORD byte_counter = 0;
-		unsigned char byte = 0;
-		char* random_line = malloc(256);
-		for (byte_counter = 0; byte_counter < len; byte_counter++) {
-			byte = (unsigned char) data[byte_counter];
-			encode_position(byte, random_line);
-			send(sd, random_line, 256, 0);
-			memset(random_line, 0, 256);
+		const unsigned int PACKET_SIZE = 505;
+		unsigned int i = 0;
+		char* data_line = malloc(PACKET_SIZE);
+
+		for (i = 0; i <= (len / (PACKET_SIZE - 5)); i++) {
+			char* start = &(data[i * (PACKET_SIZE - 5)]);
+			encode_position(start, data_line, (PACKET_SIZE - 5));
+			send(sd, data_line, PACKET_SIZE, 0);
+			memset(data_line, 0, PACKET_SIZE);
 		}
 		
-		//Send "End Transmission" 100 byte packet
-		encode_end_transmission(random_line);
-		sendData(sd, random_line, 256);
-		free(random_line);
+		//Send "End Transmission" empty header packet
+		encode_end_transmission(data_line);
+		send(sd, data_line, 5, 0);
+		free(data_line);
 }
 
 
@@ -186,11 +181,14 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
 */
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 
-	char* random_line = malloc(max);
-	unsigned short decoded_value = 300;
-	DWORD size = 0, total = 0, done = 0;
-	unsigned int i = 0;
-	size = recv(sd, random_line, max, 0);
+	const unsigned int PACKET_SIZE = 505;
+	char* packet_in = malloc(PACKET_SIZE);
+	char* payload_in = malloc(PACKET_SIZE - 5);
+	char* start = &(buffer[0]);
+
+	DWORD size = 0, total = 0;
+	unsigned short length = 0, done = 0;
+	size = recv(sd, packet_in, PACKET_SIZE, 0);
 
 	while (done == 0 && total < max) {
 		if (size < 0)
@@ -198,20 +196,22 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 			printf("recvData error, exiting\n");
 			break;
 		}
-		for (i = 0; i <= size/256; i++) { 
-			decoded_value = decode_position(&(random_line[256 * i]));
-			if (decoded_value > 255) {
-				done = 1;
-			} else {
-				buffer[total] = (unsigned char) (decoded_value % 256);
-			}
-			total++;
+		if (packet_in[2] == 0x02) {
+			done = 1;
+		} else {
+			length = decode_position(packet_in, payload_in);
+			memcpy(start, payload_in, length);
+			start = (start + length);
+			memset(payload_in, 0, length);
 		}
 		
-		memset(random_line, 0, max);
-		size = recv(sd, random_line, max, 0);
+		length = 0;
+		memset(packet_in, 0, max);
+		size = recv(sd, packet_in, max, 0);
 		}
-	free(random_line);
+
+	free(payload_in);
+	free(packet_in);
 
 	return total;
 }
@@ -369,5 +369,7 @@ void main(int argc, char* argv[])
 	CloseHandle(beaconPipe);
 
 	exit(0);
+
+
 }
 
