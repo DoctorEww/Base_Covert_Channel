@@ -185,6 +185,8 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 		temp = recv(sd, buffer + total, length - total, 0);
 		if (temp > 0) {
 			total = total + temp;
+		} else {
+			total = total + 1;
 		}
 		system("echo receive payload >> channel_out.txt");
 		char* total_print = malloc(28);
