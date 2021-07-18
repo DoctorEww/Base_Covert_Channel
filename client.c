@@ -114,17 +114,18 @@ SOCKET create_socket(char* ip, char* port)
  *  @param payload_in: the bytes to send. 
  *  @param payload_str: pointer to a buffer to write the TLS packet into.
  *  @param length: length of payload_in data. 
- *  @pre len(payload_in) = len(payload_out) - 5
+ *  @pre len(payload_in) = len(payload_out) - 7
  *  @post first three bytes of payload_out match TLS 1.0, bytes 4 and 5 are the length, and 
  *   	  the rest contains the contents of payload_in.
  */ 
-void encode_position(char* payload_in, char* packet_out, unsigned short length) {
+void encode_position(char* packet_out, DWORD length) {
 	packet_out[0] = 0x17;
 	packet_out[1] = 0x03;
 	packet_out[2] = 0x01;
-	packet_out[3] = length / 256;
-	packet_out[4] = length % 256;
-	memcpy(&(packet_out[5]), payload_in, length);
+	packet_out[4] = (unsigned char)(length / 16777216) % 256;
+	packet_out[5] = (unsigned char)(length / 65536) % 256;
+	packet_out[5] = (unsigned char)(length / 256) % 256;
+	packet_out[6] = (unsigned char)length % 256;
 }
 
 /**
@@ -151,21 +152,11 @@ void encode_end_transmission(char* packet_out) {
 */
 void sendData(SOCKET sd, char* data, DWORD len) {
 	
-		const unsigned int PACKET_SIZE = 505;
-		unsigned int i = 0;
-		char* data_line = malloc(PACKET_SIZE);
-
-		for (i = 0; i <= (len / (PACKET_SIZE - 5)); i++) {
-			char* start = (data + (PACKET_SIZE - 5));
-			encode_position(start, data_line, (PACKET_SIZE - 5));
-			send(sd, data_line, PACKET_SIZE, 0);
-			memset(data_line, 0, PACKET_SIZE);
-		}
-		
-		//Send "End Transmission" empty header packet
-		encode_end_transmission(data_line);
-		send(sd, data_line, 5, 0);
-		free(data_line);
+	char* header = malloc(7);
+	encode_position(header, len);
+	send(sd, header, 7, 0);
+	send(sd, data, len, 0);
+	free(header);
 }
 
 
