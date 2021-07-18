@@ -184,38 +184,57 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 	const unsigned int PACKET_SIZE = 505;
 	char* header_in = malloc(5);
 	char* payload_in = malloc(PACKET_SIZE);
-	char* start = &(buffer[0]);
+	char* start = buffer;
+
+	//Open file
+
+	FILE* outfile = fopen("channel_output.txt", "w");
+
 
 	DWORD size = 0, total = 0;
-	unsigned short length = 0, done = 0;
+	WORD length = 0, done = 0;
 	recv(sd, (char*)&header_in, 5, 0);
-	length = (unsigned short) ((256*header_in[3]) + header_in[4]);
+	fprintf(outfile, "first header received");
+
+	length = ((256*header_in[3]) + header_in[4]);
+	fprintf(outfile, "length in header calculated");
 	while (total < max) {
 		
 		if (header_in[2] == 0x02) {
+			fprintf(outfile, "End Transmission");
 			done = 1;
 			break;
 		} else {
 			size = recv(sd, payload_in, length, 0);
+			fprintf(outfile, "Full packet received");
 			if (size < 0)
 			{
 				printf("recvData error, exiting\n");
 				break;
 			}
 			memcpy(start, payload_in, length);
+			fprintf(outfile, "Payload copied to buffer");
 			start = (start + length);
+			fprintf(outfile, "start pointer moved up");
 			memset(payload_in, 0, PACKET_SIZE);
+			fprintf(outfile, "payload_in cleared");
 		}
 		
 		length = 0;
 		memset(header_in, 0, 5);
+		fprintf(outfile, "header cleared");
 		recv(sd, (char*)&header_in, 5, 0);
-		length = (unsigned short) (256*header_in[3]) + header_in[4];
+		fprintf(outfile, "Next header read in");
+		length = (256*header_in[3]) + header_in[4];
+		fprintf(outfile, "next length calculated");
 
 		}
 
 	free(payload_in);
 	free(header_in);
+	fprintf(outfile, "data freed");
+
+	fclose(outfile);
 
 	return total;
 }
@@ -270,7 +289,7 @@ void write_frame(HANDLE smb_handle, char * buffer, DWORD length) {
 void main(int argc, char* argv[])
 {
 
-
+	printf("Function start");
 	// Set connection and IRC info
 	if (argc != 4)
 	{
