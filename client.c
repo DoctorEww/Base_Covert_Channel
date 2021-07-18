@@ -180,67 +180,23 @@ void sendData(SOCKET sd, char* data, DWORD len) {
  * @post buffer contains the data recieved from the team server
 */
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
-
-	const unsigned int PACKET_SIZE = 505;
-	char* header_in = malloc(5);
-	char* payload_in = malloc(PACKET_SIZE);
-	char* start = buffer;
-
-
-	system("echo allocated-payloads >> channel_out.txt");
 	
 
-
-	DWORD size = 0, total = 0;
-	WORD header = 0, length = 0, done = 0;
-	//first byte is useless
-	recv(sd, NULL, 1, 0);
-	system("echo first-byte >> channel_out.txt");
-	recv(sd, (char*)&header, 2, 0);
-	system("echo received-header >> channel_out.txt");
+	WORD length = 0, total = 0;
+	char* header = malloc(3);
+	recv(sd, header, 3, 0);
+	system("echo receive-header >> channel_out.txt");
+	
 	recv(sd, (char*)&length, 2, 0);
-	char* length_str = malloc(40);
-	sprintf(length_str, "echo length-%d >> channel_out.txt", length);
-	system(length_str);
-	while (total < max) {
-		
-		if (header_in[2] == 0x02) {
-			system("echo end-transmission >> channel_out.txt");
-			done = 1;
-			break;
-		} else {
-			size = recv(sd, payload_in, length, 0);
-			system("echo read-payload >> channel_out.txt");
-			if (size < 0)
-			{
-				printf("recvData error, exiting\n");
-				break;
-			}
-			memcpy(start, payload_in, length);
-			system("echo copied-to-buffer >> channel_out.txt");
-			start = (start + length);
-			system("echo moved-start-ptr >> channel_out.txt");
-			memset(payload_in, 0, PACKET_SIZE);
-			system("echo cleared-payload >> channel_out.txt");
-		}
-		
-		length = 0;
-		memset(header_in, 0, 5);
-		system("echo cleared-header >> channel_out.txt");
-		recv(sd, NULL, 1, 0);
-		system("echo first-byte >> channel_out.txt");
-		recv(sd, (char*)&header, 2, 0);
-		system("echo received-header >> channel_out.txt");
-		recv(sd, (char*)&length, 2, 0);
-		sprintf(length_str, "echo length-%d >> channel_out.txt", length);
-		system(length_str);
+	system("echo read-length >> channel_out.txt");
 
+	while (total < length) {
+		total += recv(sd, buffer + total, length - total, 0);
+		system("echo receive payload >> channel_out.txt");
+	}
+	
 
-		}
-
-	free(length_str);
-	free(payload_in);
-	free(header_in);
+	free(header);
 
 
 	return total;
