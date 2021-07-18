@@ -91,22 +91,22 @@ SOCKET create_socket(char* ip, char* port)
 
 
 
-/**
- *  This function pulls the data out of the TLS packet. 
- *  @param packet: the TLS packet to remove the string from.
- *  @param payload: the buffer to write the string to. 
- *  @return the length of payload_out
- *  @pre len(payload) = len(packet) - 5
- *  @post application data from packet buffer gets written to payload buffer. 
- *  
- */ 
-unsigned short decode_position(char* packet_in, char* payload_out ) {
+// /**
+//  *  This function pulls the data out of the TLS packet. 
+//  *  @param packet: the TLS packet to remove the string from.
+//  *  @param payload: the buffer to write the string to. 
+//  *  @return the length of payload_out
+//  *  @pre len(payload) = len(packet) - 5
+//  *  @post application data from packet buffer gets written to payload buffer. 
+//  *  
+//  */ 
+// unsigned short decode_position(char* packet_in, char* payload_out ) {
 	
-	unsigned short length = (unsigned short) ((256 * packet_in[3]) + packet_in[4]);
-	char* start = &(packet_in[5]);
-	memcpy(payload_out, start, length);
-	return length;
-}
+// 	unsigned short length = (unsigned short) ((256 * packet_in[3]) + packet_in[4]);
+// 	char* start = &(packet_in[5]);
+// 	memcpy(payload_out, start, length);
+// 	return length;
+// }
 
 
 /**
@@ -149,14 +149,14 @@ void encode_end_transmission(char* packet_out) {
  * @param data A pointer to an array containing data to send
  * @param len Length of data to send
 */
-void sendData(SOCKET sd, const char* data, DWORD len) {
+void sendData(SOCKET sd, char* data, DWORD len) {
 	
 		const unsigned int PACKET_SIZE = 505;
 		unsigned int i = 0;
 		char* data_line = malloc(PACKET_SIZE);
 
 		for (i = 0; i <= (len / (PACKET_SIZE - 5)); i++) {
-			char* start = &(data[i * (PACKET_SIZE - 5)]);
+			char* start = (data + (PACKET_SIZE - 5));
 			encode_position(start, data_line, (PACKET_SIZE - 5));
 			send(sd, data_line, PACKET_SIZE, 0);
 			memset(data_line, 0, PACKET_SIZE);
@@ -182,36 +182,42 @@ void sendData(SOCKET sd, const char* data, DWORD len) {
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 
 	const unsigned int PACKET_SIZE = 505;
-	char* packet_in = malloc(PACKET_SIZE);
+	char* header_in = malloc(5);
 	char* payload_in = malloc(PACKET_SIZE - 5);
 	char* start = &(buffer[0]);
 
 	DWORD size = 0, total = 0;
 	unsigned short length = 0, done = 0;
-	size = recv(sd, packet_in, PACKET_SIZE, 0);
+	recv(sd, (char*)&header_in, 5, 0);
+	length = (unsigned short) (256*header_in[3]) + header_in[4];
+
 
 	while (done == 0 && total < max) {
-		if (size < 0)
-		{
-			printf("recvData error, exiting\n");
-			break;
-		}
-		if (packet_in[2] == 0x02) {
+		
+		if (header_in[2] == 0x02) {
 			done = 1;
+			break;
 		} else {
-			length = decode_position(packet_in, payload_in);
+			size = recv(sd, payload_in, length, 0);
+			if (size < 0)
+			{
+				printf("recvData error, exiting\n");
+				break;
+			}
 			memcpy(start, payload_in, length);
 			start = (start + length);
 			memset(payload_in, 0, length);
 		}
 		
 		length = 0;
-		memset(packet_in, 0, max);
-		size = recv(sd, packet_in, max, 0);
+		memset(header_in, 0, max);
+		recv(sd, (char*)&header_in, 5, 0);
+		length = (unsigned short) (256*header_in[3]) + header_in[4];
+
 		}
 
 	free(payload_in);
-	free(packet_in);
+	free(header_in);
 
 	return total;
 }
