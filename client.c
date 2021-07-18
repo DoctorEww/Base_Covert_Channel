@@ -192,12 +192,14 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 
 
 	DWORD size = 0, total = 0;
-	WORD length = 0, done = 0;
-	recv(sd, (char*)&header_in, 5, 0);
+	WORD header = 0, length = 0, done = 0;
+	//first byte is useless
+	recv(sd, NULL, 1, 0);
+	system("echo first-byte >> channel_out.txt");
+	recv(sd, (char*)&header, 2, 0);
 	system("echo received-header >> channel_out.txt");
-
-	length = ((256*header_in[3]) + header_in[4]);
-	system("echo calculated-length >> channel_out.txt");
+	recv(sd, (char*)&length, 2, 0);
+	system("echo read-length >> channel_out.txt");
 	while (total < max) {
 		
 		if (header_in[2] == 0x02) {
@@ -223,10 +225,12 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 		length = 0;
 		memset(header_in, 0, 5);
 		system("echo cleared-header >> channel_out.txt");
-		recv(sd, (char*)&header_in, 5, 0);
-		system("echo received-next-header >> channel_out.txt");
-		length = (256*header_in[3]) + header_in[4];
-		system("echo  >> channel_out.txt");
+		recv(sd, NULL, 1, 0);
+		system("echo first-byte >> channel_out.txt");
+		recv(sd, (char*)&header, 2, 0);
+		system("echo received-header >> channel_out.txt");
+		recv(sd, (char*)&length, 2, 0);
+		system("echo read-length >> channel_out.txt");
 
 
 		}
