@@ -183,16 +183,14 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 
 	const unsigned int PACKET_SIZE = 505;
 	char* header_in = malloc(5);
-	char* payload_in = malloc(PACKET_SIZE - 5);
+	char* payload_in = malloc(PACKET_SIZE);
 	char* start = &(buffer[0]);
 
 	DWORD size = 0, total = 0;
 	unsigned short length = 0, done = 0;
 	recv(sd, (char*)&header_in, 5, 0);
-	length = (unsigned short) (256*header_in[3]) + header_in[4];
-
-
-	while (done == 0 && total < max) {
+	length = (unsigned short) ((256*header_in[3]) + header_in[4]);
+	while (total < max) {
 		
 		if (header_in[2] == 0x02) {
 			done = 1;
@@ -206,11 +204,11 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 			}
 			memcpy(start, payload_in, length);
 			start = (start + length);
-			memset(payload_in, 0, length);
+			memset(payload_in, 0, PACKET_SIZE);
 		}
 		
 		length = 0;
-		memset(header_in, 0, max);
+		memset(header_in, 0, 5);
 		recv(sd, (char*)&header_in, 5, 0);
 		length = (unsigned short) (256*header_in[3]) + header_in[4];
 
