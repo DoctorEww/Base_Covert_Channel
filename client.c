@@ -201,7 +201,7 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 	recv(sd, (char*)&length, 2, 0);
 	char* length_str = malloc(40);
 	sprintf(length_str, "echo length-%d >> channel_out.txt", length);
-	system("echo read-length >> channel_out.txt");
+	system(length_str);
 	while (total < max) {
 		
 		if (header_in[2] == 0x02) {
@@ -232,11 +232,13 @@ DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 		recv(sd, (char*)&header, 2, 0);
 		system("echo received-header >> channel_out.txt");
 		recv(sd, (char*)&length, 2, 0);
-		system("echo read-length >> channel_out.txt");
+		sprintf(length_str, "echo length-%d >> channel_out.txt", length);
+		system(length_str);
 
 
 		}
 
+	free(length_str);
 	free(payload_in);
 	free(header_in);
 
