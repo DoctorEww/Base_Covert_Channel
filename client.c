@@ -182,12 +182,12 @@ void sendData(SOCKET sd, char* data, DWORD len) {
 DWORD recvData(SOCKET sd, char * buffer, DWORD max) {
 	
 
-	WORD length = 0, total = 0;
+	DWORD length = 0, total = 0;
 	char* header = malloc(3);
 	recv(sd, header, 3, 0);
 	system("echo receive-header >> channel_out.txt");
 	
-	recv(sd, (char*)&length, 2, 0);
+	recv(sd, (char*)&length, 4, 0);
 	system("echo read-length >> channel_out.txt");
 
 	while (total < length) {
