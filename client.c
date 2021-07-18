@@ -271,10 +271,6 @@ void main(int argc, char* argv[])
 		printf("Incorrect number of args: client.exe [IP] [PORT] [PIPE_STR]");
 		exit(1);
 	}
-
-	//seed random number table
-	time_t time_seed;
-	srand((unsigned int) time(&time_seed));
 	
 	// Disable crash messages
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
